@@ -64,13 +64,13 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 @Category({ReplicationTests.class, MediumTests.class})
-public class TestReplicationServer {
+public class TestReplicationServerSink {
 
   @ClassRule
   public static final HBaseClassTestRule CLASS_RULE =
-      HBaseClassTestRule.forClass(TestReplicationServer.class);
+      HBaseClassTestRule.forClass(TestReplicationServerSink.class);
 
-  private static final Logger LOG = LoggerFactory.getLogger(TestReplicationServer.class);
+  private static final Logger LOG = LoggerFactory.getLogger(TestReplicationServerSink.class);
 
   private static final HBaseTestingUtility TEST_UTIL = new HBaseTestingUtility();
 
@@ -145,22 +145,7 @@ public class TestReplicationServer {
     replicateWALEntryAndVerify(sinkPeer);
   }
 
-  /**
-   * Requests region server using {@link AsyncReplicationServerAdmin}
-   */
-  @Test
-  public void testReplicateWAL2() throws Exception {
-    AsyncClusterConnection conn =
-        TEST_UTIL.getHBaseCluster().getMaster().getAsyncClusterConnection();
-    ServerName rs = TEST_UTIL.getHBaseCluster().getLiveRegionServerThreads().get(0)
-        .getRegionServer().getServerName();
-    AsyncReplicationServerAdmin replAdmin = conn.getReplicationServerAdmin(rs);
-
-    ReplicationServerSinkPeer sinkPeer = new ReplicationServerSinkPeer(rs, replAdmin);
-    replicateWALEntryAndVerify(sinkPeer);
-  }
-
-  private void replicateWALEntryAndVerify(SinkPeer sinkPeer) throws Exception {
+  private void replicateWALEntryAndVerify(ReplicationServerSinkPeer sinkPeer) throws Exception {
     Entry[] entries = new Entry[BATCH_SIZE];
     for(int i = 0; i < BATCH_SIZE; i++) {
       entries[i] = generateEdit(i, TABLENAME, Bytes.toBytes(i));

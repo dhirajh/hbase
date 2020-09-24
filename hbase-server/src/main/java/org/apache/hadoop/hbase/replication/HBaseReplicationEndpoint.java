@@ -42,11 +42,15 @@ import org.apache.hadoop.hbase.client.AsyncRegionServerAdmin;
 import org.apache.hadoop.hbase.client.AsyncReplicationServerAdmin;
 import org.apache.hadoop.hbase.client.ClusterConnectionFactory;
 import org.apache.hadoop.hbase.protobuf.ReplicationProtobufUtil;
+import org.apache.hadoop.hbase.ScheduledChore;
+import org.apache.hadoop.hbase.Server;
 import org.apache.hadoop.hbase.security.User;
-import org.apache.hadoop.hbase.util.FutureUtils;
 import org.apache.hadoop.hbase.wal.WAL;
-import org.apache.hadoop.hbase.zookeeper.ZKClusterId;
 import org.apache.hadoop.hbase.zookeeper.ZKListener;
+import org.apache.hadoop.hbase.ServerName;
+import org.apache.hadoop.hbase.security.UserProvider;
+import org.apache.hadoop.hbase.util.FutureUtils;
+import org.apache.hadoop.hbase.zookeeper.ZKClusterId;
 import org.apache.hadoop.hbase.zookeeper.ZKUtil;
 import org.apache.hadoop.hbase.zookeeper.ZKWatcher;
 import org.apache.yetus.audience.InterfaceAudience;
@@ -321,6 +325,10 @@ public abstract class HBaseReplicationEndpoint extends BaseReplicationEndpoint
       if (!useZk || ReplicationUtils.isPeerClusterSupportReplicationOffload(conn)) {
         useZk = false;
         slaveAddresses = fetchSlavesAddresses();
+        if (slaveAddresses.isEmpty()) {
+          LOG.warn("No sinks available at peer. Try fetch sinks by using zk.");
+          useZk = true;
+        }
       } else {
         useZk = true;
       }
@@ -328,13 +336,15 @@ public abstract class HBaseReplicationEndpoint extends BaseReplicationEndpoint
       LOG.warn("Peer {} try to fetch servers by admin failed. Using zk impl.", ctx.getPeerId(), t);
       useZk = true;
     }
+
     if (useZk) {
       slaveAddresses = fetchSlavesAddressesByZK();
     }
 
     if (slaveAddresses.isEmpty()) {
-      LOG.warn("No sinks available at peer. Will not be able to replicate");
+      LOG.warn("No sinks available at peer. Will not be able to replicate.");
     }
+
     Collections.shuffle(slaveAddresses, ThreadLocalRandom.current());
     int numSinks = (int) Math.ceil(slaveAddresses.size() * ratio);
     synchronized (this) {
@@ -368,10 +378,10 @@ public abstract class HBaseReplicationEndpoint extends BaseReplicationEndpoint
   }
 
   private SinkPeer createSinkPeer(ServerName serverName) throws IOException {
-    if (ReplicationUtils.isPeerClusterSupportReplicationOffload(conn)) {
-      return new ReplicationServerSinkPeer(serverName, conn.getReplicationServerAdmin(serverName));
-    } else {
+    if (fetchServersUseZk) {
       return new RegionServerSinkPeer(serverName, conn.getRegionServerAdmin(serverName));
+    } else {
+      return new ReplicationServerSinkPeer(serverName, conn.getReplicationServerAdmin(serverName));
     }
   }
 
